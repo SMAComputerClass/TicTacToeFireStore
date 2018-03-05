@@ -1,0 +1,33 @@
+
+
+
+/* Replay button starts hidden, only appears when game ends*/
+    #replayButton {
+      visibility: hidden;
+      }
+
+/* Use # because board is an individual named element */
+      #board {
+        display: flex;
+        width: 450px;
+        height: 450px;
+        flex-direction: row;
+        flex-wrap:wrap;
+        justify-content:flex-start;
+        }
+
+/* Use the . because square is a class */
+      .square {
+        height: 150px;
+        width: 150px;
+        box-sizing: border-box;
+        border: 5px solid black;
+        font-size: 5em;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        }
+
+      .square:hover {
+        cursor: pointer;
+      }
