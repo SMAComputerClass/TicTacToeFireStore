@@ -11,6 +11,7 @@
       var GAME_WINNER = 1;
       var GAME_TIE = 2;
 
+      var gameCount = 0;
       var mySymbol;
   //    var currentPlayer = PLAYER_ONE_SYMBOL;
       var numberOfMoves = 0; // if numberOfMoves reaches 9 and there is no winner, it's a tie!
@@ -18,7 +19,10 @@
       // retrieve the screen elements into global variables
       var board = document.getElementById("board");  // only 1 board, use ID
       var replayButton = document.getElementById("replayButton");
+      var resetDataButton = document.getElementById("resetDataButton");
+
       var results = document.getElementById("resultsText");
+      results.innerHTML = "";
       var foundWinner = false;  // simple boolen for use in loop
 
 // --------------Firestore stuff --------------------
@@ -36,20 +40,21 @@
   firebase.initializeApp(config);
   var db = firebase.firestore();
 
-  var initializeGame = false;
-
   // retrieve data from firestore and store in global vars, add listeners
   var gameStartedRef = db.collection("Status").doc("gameStarted");
   var gameStarted = "";
 
+  // Initial get on gameStarted.  Only run once
   gameStartedRef.get().then(function(doc) {
       if (doc.exists)
       {
-          console.log("Document data:", doc.data());
+          console.log("Document data here:", doc.data());
           gameStarted = doc.data().val;
 
           if (gameStarted == false)
           {
+              console.log("Within the Get Here - looking for this - how early");
+
               var zz;
               for (zz=0;zz<9;zz++)
               {
@@ -57,11 +62,18 @@
               }
 
               db.collection("Status").doc("gameStarted").set({val:true});
+
+              console.log("Within the Get Here - but after the next set");
+
               mySymbol = PLAYER_ONE_SYMBOL;
+
           } // end if gameStarted == false
           else
           {
               mySymbol = PLAYER_TWO_SYMBOL;
+              gameCount++;
+              console.log("Looking here - xxx - how early");
+
               //initializeGame = true;
           }  // end else gameStarted == false
 
@@ -73,6 +85,40 @@
   }).catch(function(error) {
       console.log("Error getting document:", error);
   });
+
+// ---- gameStarted listener  -----------
+
+gameStartedRef.onSnapshot(function(doc)
+{
+  var gameStartedFromDB = doc.data().val;
+
+  if (gameStartedFromDB == false)
+  {
+
+    console.log("Within the Snapshot Here");
+
+    // reset turn to player 1 and reset global vars
+    currentPlayer = PLAYER_ONE_SYMBOL;
+    numberOfMoves = 0; // if numberOfMoves reaches 9 and there is no winner, it's a tie!
+    console.log("number of moves after restart game : " + numberOfMoves);
+    foundWinner = false;  // reset var
+
+    // reset results area
+    results.innerHTML = "You are " + mySymbol + "s.   " + currentPlayer + "s Turn.";
+    // results.innerHTML = currentPlayer + "s Turn.";
+
+    replayButton.style.visibility = "hidden";
+
+    if (gameCount > 0)
+      db.collection("Status").doc("gameStarted").set({val:true});
+
+    gameCount++;
+
+  }
+
+});
+
+// --------  end gameStarted listener  -----------
 
   var currentPlayerRef = db.collection("Status").doc("currentPlayer");
   var currentPlayer = "";
@@ -92,13 +138,21 @@
     currentPlayerRef.onSnapshot(function(doc)
     {
       currentPlayer = doc.data().val;
+
+      // increment move counter if other guy moved
+      if ((currentPlayer == mySymbol) && ((numberOfMoves != 0) || (mySymbol == PLAYER_TWO_SYMBOL)))
+      {
+        numberOfMoves++;
+        console.log("Move number snapshot : " + numberOfMoves);
+      }
+      results.innerHTML = "You are " + mySymbol + "s.   " + currentPlayer + "s Turn.";
       // document.getElementById("playerName").innerHTML = myData.first;
     });
 
 
   // get refs to the 9 squares
   var dbSquareRef = new Array; // global array storing values in DB
-  var docRef = db.collection("Players").doc("FquLRhCjkzwRZnP0sj8h");
+  // var docRef = db.collection("Players").doc("FquLRhCjkzwRZnP0sj8h");
 
   var zz;
   for (zz=0;zz<9;zz++)
@@ -115,9 +169,28 @@
       var allSquares = document.querySelectorAll('.square');
 
       allSquares[myID].innerHTML = myData.val;
-      //document.getElementById("playerName").innerHTML = myData.first;
-      // myData.val should equal X or O.
-      // alert ("On change, incoming value is : " + myData.id + " data is " + myData.val);
+
+      var check = checkForWinner();  // function returns 1 of 3 game statuses - Continue, Tie, or Win
+
+      // 3 possible status options:
+      switch (check)
+      {
+        case GAME_CONTINUE:  // Do nothing
+          break;
+
+        case GAME_TIE:
+          results.innerHTML = "Game ended in a tie!";
+          console.log ("Game ended in a tie!");
+          replayButton.style.visibility = "visible";  // make the button visible
+          break;
+
+        default:    // GAME_WINNER
+            results.innerHTML = currentPlayer + " Won!";
+            console.log (currentPlayer + " Won!");
+            replayButton.style.visibility = "visible";  // make the button visible
+
+      } // end switch
+
     });
 
   }
@@ -142,8 +215,10 @@
 
         // update square to current turn's symbol - legal play
         e.target.innerHTML = currentPlayer;
+
         numberOfMoves++;  // increase only if valid move
 
+        console.log("My own turn Move number : " + numberOfMoves);
         // update database
         //alert("Square id = " + e.target.id);
 
@@ -185,36 +260,44 @@
 
       });  // end of the board eventlistener
 
-// --- Click event on the replay button -------------------
+// --- Click event on the reset data button -------------------
+      resetDataButton.addEventListener('click', function(e)
+      {
+
+        db.collection("Status").doc("currentPlayer").set({val:PLAYER_ONE_SYMBOL});
+        db.collection("Status").doc("gameStarted").set({val:false});
+
+        var zz;
+        for (zz=0;zz<9;zz++)
+        {
+          db.collection("Squares").doc(String(zz)).set({val:""});
+        }
+
+        gameCount = 0;
+
+        // currentPlayer = PLAYER_ONE_SYMBOL;
+        results.innerHTML = "";
+        // numberOfMoves = 0;
+
+      });  // end reset data button listener function
+
+// ----------------------------
+
       replayButton.addEventListener('click', function(e)
       {
 
-        // reset turn to player 1
-        currentPlayer = PLAYER_ONE_SYMBOL;
         db.collection("Status").doc("currentPlayer").set({val:PLAYER_ONE_SYMBOL});
+        db.collection("Status").doc("gameStarted").set({val:false});
 
-        numberOfMoves = 0; // if numberOfMoves reaches 9 and there is no winner, it's a tie!
-        foundWinner = false;  // reset var
 
-        // blank out all squares
-        var squares = document.querySelectorAll('.square');
-
-        var i;
-
-        // for (i=0; i<squares.length; i++)
-        // {
-        //   squares[i].innerHTML = ""; // set the square text to empty string
-        // }
-
+          // update database to blanks
           var zz;
           for (zz=0;zz<9;zz++)
           {
             db.collection("Squares").doc(String(zz)).set({val:""});
           }
 
-        // reset results area
-        results.innerHTML = "";
-        replayButton.style.visibility = "hidden";
+          results.innerHTML = "You are " + mySymbol + "s.   " + currentPlayer + "s Turn.";
 
       });  // end replay button listener function
 
@@ -251,7 +334,17 @@
 
         }  //  end while loop
 
-        if ((foundWinner == false) && (numberOfMoves == 9))
+        // check for Tie
+
+        var tieFound = true;
+
+        for (i=0; i<squares.length;i++)
+        {
+            if (squares[i].innerHTML == "")
+              tieFound = false;
+        }
+
+        if ((foundWinner == false) && (tieFound == true))
           return GAME_TIE;
 
         if (foundWinner == true)
@@ -260,30 +353,3 @@
           return GAME_CONTINUE;
 
       }  // End Check for Winner function -----------------------------------------
-
-
-      function getRealtimeUpdates()
-      {
-        var docRef = db.collection("Players").doc("FquLRhCjkzwRZnP0sj8h");
-
-        docRef.onSnapshot(function(doc)
-        {
-          const myData = doc.data();
-          document.getElementById("playerName").innerHTML = myData.first;
-        });
-      }
-
-function initializeTheGame()
-{
-    if (gameStarted == false)
-    {
-      db.collection("Status").doc("gameStarted").set({val:true});
-      mySymbol = PLAYER_ONE_SYMBOL;
-      initializeGame = true;
-    }
-    else
-    {
-      mySymbol = PLAYER_TWO_SYMBOL;
-      initializeGame = true;
-    }
-}
